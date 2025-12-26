@@ -1,0 +1,6 @@
+# Original repositories
+nerd-fonts/
+Iosevka/
+
+# Build artifacts
+dist/
