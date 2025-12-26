@@ -1,45 +1,41 @@
 # Iosevka customizer: https://typeof.net/Iosevka/customizer
 # Nerd fonts cheat sheet: https://www.nerdfonts.com/cheat-sheet
 
-set script-interpreter := ['uv', 'run', '--script']
+default: clone build-fontcc-image compile-iosevka patch-nerd-font
 
-default: clone build-image compile-iosevka nerd-font-patch
-
-# Clone Iosevka and nerd-fonts repositories at latest release
-[script]
+# Clone/update only Docker directory from Iosevka repo.
 clone:
-    import subprocess, os
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TAGS=$(git ls-remote --tags --sort=-version:refname https://github.com/be5invis/Iosevka.git)
+    TAG=$(echo "$TAGS" | head -1 | sed 's/.*refs\/tags\///')
+    echo "==> Iosevka: latest release is $TAG"
+    if [ -d "Iosevka" ]; then
+        git -C Iosevka fetch --depth 1 origin tag "$TAG"
+        git -C Iosevka checkout "$TAG"
+    else
+        git clone --depth 1 --filter=blob:none --sparse --branch "$TAG" https://github.com/be5invis/Iosevka.git
+        git -C Iosevka sparse-checkout set docker
+    fi
 
-    def get_latest_tag(repo_url):
-        result = subprocess.run(
-            ["git", "ls-remote", "--tags", "--sort=-version:refname", repo_url],
-            capture_output=True, text=True, check=True
-        )
-        first_line = result.stdout.strip().split("\n")[0]
-        return first_line.split()[1].replace("refs/tags/", "")
-
-    def clone_or_update(name, repo_url):
-        tag = get_latest_tag(repo_url)
-        print(f"{name}: latest release is {tag}")
-        if os.path.isdir(name):
-            subprocess.run(["git", "-C", name, "fetch", "--depth", "1", "origin", "tag", tag], check=True)
-            subprocess.run(["git", "-C", name, "checkout", tag], check=True)
-        else:
-            subprocess.run(["git", "clone", "--depth", "1", "--branch", tag, repo_url], check=True)
-
-    clone_or_update("Iosevka", "https://github.com/be5invis/Iosevka.git")
-    clone_or_update("nerd-fonts", "https://github.com/ryanoasis/nerd-fonts.git")
-
-# Build Docker images for font compilation and patching
-build-image:
-    docker build -t=nerdfonts/patcher nerd-fonts
+# Build Docker image for Iosevka font compilation
+build-fontcc-image:
     docker build -t=fontcc Iosevka/docker
 
 # Build Iosevka font distribution
 compile-iosevka:
-    docker run -it --rm -v ${PWD}:/work fontcc ttf-unhinted::iosevka ttf-unhinted::iosevka-term
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TAGS=$(git ls-remote --tags --sort=-version:refname https://github.com/be5invis/Iosevka.git)
+    TAG=$(echo "$TAGS" | head -1 | sed 's/.*refs\/tags\///')
+    echo "==> Using Iosevka $TAG"
+    docker run -it --rm -v ${PWD}:/work -e "VERSION_TAG=$TAG" fontcc ttf-unhinted::iosevka ttf-unhinted::iosevka-term
 
 # Patch fonts with Nerd Font glyphs
-nerd-font-patch:
-    docker run --rm -v ./dist/iosevka-term/TTF-Unhinted/:/in:Z -v ./dist:/out:Z nerdfonts/patcher --careful --complete
-    docker run --rm -v ./dist/iosevka/TTF-Unhinted/:/in:Z -v ./dist:/out:Z nerdfonts/patcher --careful --complete
+patch-nerd-font:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TAG=$(curl -s "https://hub.docker.com/v2/repositories/nerdfonts/patcher/tags?page_size=1&name=4" | grep -o '"name":"[0-9.]*"' | head -1 | cut -d'"' -f4)
+    echo "==> Using nerdfonts/patcher:$TAG"
+    docker run --rm -v ./dist/iosevka-term/TTF-Unhinted/:/in:Z -v ./dist:/out:Z nerdfonts/patcher:$TAG --complete
+    docker run --rm -v ./dist/iosevka/TTF-Unhinted/:/in:Z -v ./dist:/out:Z nerdfonts/patcher:$TAG --complete
