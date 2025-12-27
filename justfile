@@ -1,7 +1,8 @@
 # Iosevka customizer: https://typeof.net/Iosevka/customizer
 # Nerd fonts cheat sheet: https://www.nerdfonts.com/cheat-sheet
 
-default: clone build-fontcc-image compile-iosevka patch-nerd-font
+# Default recipe: compile and install Iosevka font from scratch
+default: clone build-fontcc-image compile-iosevka patch-nerd-font install
 
 # Clone/update only Docker directory from Iosevka repo.
 clone:
@@ -39,3 +40,10 @@ patch-nerd-font:
     echo "==> Using nerdfonts/patcher:$TAG"
     docker run --rm -v ./dist/iosevka/TTF-Unhinted/:/in:Z -v ./dist:/out:Z nerdfonts/patcher:$TAG --complete
     docker run --rm -v ./dist/iosevka-term/TTF-Unhinted/:/in:Z -v ./dist:/out:Z nerdfonts/patcher:$TAG --complete
+
+# Install font on macOS
+install:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cp dist/*.ttf ~/Library/Fonts/
+
